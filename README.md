@@ -66,7 +66,7 @@ The frontend is a single HTML page with:
 | /stats   | GET    | Get full session statistics      |
 | /reset   | POST   | Clear all session data           |
 
-## Key Concepts for Interviews
+## 
 
 - **Markov Chain**: A probabilistic model where the next state depends only on the current state (memoryless property). Order-N Markov chains look at N previous states.
 - **Ensemble model**: Combining multiple weak models to produce a stronger prediction.
