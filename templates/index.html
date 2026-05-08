@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPS — AI Prediction Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset & Tokens ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0a0f;
+      --surface:  #13131d;
+      --card:     #1a1a28;
+      --border:   #2a2a40;
+      --accent:   #7c6cff;
+      --accent2:  #ff6c8f;
+      --green:    #4aff9e;
+      --amber:    #ffc84a;
+      --text:     #e8e8f0;
+      --muted:    #6b6b88;
+      --rock-col:    #ff7043;
+      --paper-col:   #42a5f5;
+      --scissors-col:#ab47bc;
+      --glow-rock:    0 0 32px #ff704360;
+      --glow-paper:   0 0 32px #42a5f560;
+      --glow-scissors:0 0 32px #ab47bc60;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated grid background ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrap { position: relative; z-index: 1; width: 100%; max-width: 860px; padding: 32px 20px 60px; }
+
+    /* ── Header ── */
+    header { text-align: center; margin-bottom: 36px; }
+    .logo {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(2rem, 6vw, 3.5rem);
+      font-weight: 700;
+      letter-spacing: -2px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 60%, var(--amber) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .tagline { color: var(--muted); font-size: 0.9rem; letter-spacing: 0.08em; margin-top: 6px; }
+
+    /* ── Score Bar ── */
+    .score-bar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 24px;
+      margin-bottom: 24px;
+    }
+    .score-side { text-align: center; }
+    .score-label { font-size: 0.72rem; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+    .score-num {
+      font-family: 'Space Mono', monospace;
+      font-size: 2.4rem;
+      font-weight: 700;
+      transition: transform 0.2s, color 0.2s;
+    }
+    .score-num.bump { animation: bump 0.3s ease; }
+    @keyframes bump { 0%,100%{transform:scale(1)} 50%{transform:scale(1.3)} }
+    .score-you  { color: var(--green); }
+    .score-ai   { color: var(--accent2); }
+    .score-divider { font-family: 'Space Mono', monospace; color: var(--border); font-size: 1.6rem; }
+
+    /* ── AI Confidence ── */
+    .ai-insight {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .insight-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.4s, box-shadow 0.4s;
+    }
+    .insight-dot.active { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+    .insight-text { font-size: 0.85rem; color: var(--muted); line-height: 1.5; flex: 1; }
+    .insight-text strong { color: var(--text); }
+    .confidence-bar-wrap { width: 90px; flex-shrink: 0; }
+    .confidence-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; text-align: right; }
+    .confidence-track {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+
+    /* ── Arena ── */
+    .arena {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .fighter {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px 20px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      min-height: 170px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .fighter-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      text-transform: uppercase;
+      position: absolute;
+      top: 14px; left: 0; right: 0;
+      text-align: center;
+    }
+    .fighter-emoji {
+      font-size: 3.2rem;
+      line-height: 1;
+      transition: transform 0.4s cubic-bezier(.34,1.56,.64,1), filter 0.4s;
+      filter: grayscale(0.6);
+    }
+    .fighter.reveal .fighter-emoji { filter: grayscale(0); transform: scale(1.15); }
+    .fighter-name {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.82rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+    }
+    .fighter.reveal .fighter-name { color: var(--text); }
+
+    /* glow on reveal */
+    .fighter.rock-reveal    { box-shadow: var(--glow-rock);    border-color: var(--rock-col); }
+    .fighter.paper-reveal   { box-shadow: var(--glow-paper);   border-color: var(--paper-col); }
+    .fighter.scissors-reveal{ box-shadow: var(--glow-scissors); border-color: var(--scissors-col); }
+
+    /* shake on loss */
+    @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+    .fighter.shake { animation: shake 0.4s ease; }
+
+    .vs-badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.1rem;
+      color: var(--border);
+      font-weight: 700;
+    }
+
+    /* ── Outcome Banner ── */
+    .outcome-banner {
+      text-align: center;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+    .outcome-text {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .outcome-text.show { opacity: 1; transform: translateY(0); }
+    .outcome-win  { color: var(--green); }
+    .outcome-lose { color: var(--accent2); }
+    .outcome-tie  { color: var(--amber); }
+
+    /* ── Move Buttons ── */
+    .move-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .move-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 12px 18px;
+      cursor: pointer;
+      font-family: inherit;
+      color: var(--text);
+      text-align: center;
+      transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .move-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 0.2s;
+      border-radius: inherit;
+    }
+    .move-btn[data-move=rock]::after     { background: radial-gradient(circle at 50% 0, #ff704320, transparent 70%); }
+    .move-btn[data-move=paper]::after    { background: radial-gradient(circle at 50% 0, #42a5f520, transparent 70%); }
+    .move-btn[data-move=scissors]::after { background: radial-gradient(circle at 50% 0, #ab47bc20, transparent 70%); }
+    .move-btn:hover::after { opacity: 1; }
+    .move-btn:hover { transform: translateY(-4px); }
+    .move-btn[data-move=rock]:hover     { border-color: var(--rock-col);    box-shadow: 0 8px 24px #ff704330; }
+    .move-btn[data-move=paper]:hover    { border-color: var(--paper-col);   box-shadow: 0 8px 24px #42a5f530; }
+    .move-btn[data-move=scissors]:hover { border-color: var(--scissors-col);box-shadow: 0 8px 24px #ab47bc30; }
+    .move-btn:active { transform: translateY(0) scale(0.97); }
+    .move-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+    .btn-emoji { font-size: 2.4rem; display: block; margin-bottom: 8px; line-height: 1; }
+    .btn-label { font-family: 'Space Mono', monospace; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+    /* ── Controls Row ── */
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .difficulty-toggle {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .diff-btn {
+      padding: 8px 18px;
+      font-size: 0.8rem;
+      font-family: 'Space Mono', monospace;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      letter-spacing: 0.06em;
+    }
+    .diff-btn.active { background: var(--accent); color: #fff; }
+
+    .reset-btn {
+      margin-left: auto;
+      padding: 8px 18px;
+      font-size: 0.8rem;
+      font-family: 'Space Mono', monospace;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .reset-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+    /* ── Stats Panel ── */
+    .stats-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .stats-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-val {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .stat-key { font-size: 0.7rem; color: var(--muted); margin-top: 4px; letter-spacing: 0.06em; }
+
+    /* Move distribution bars */
+    .dist-title { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 10px; text-transform: uppercase; }
+    .dist-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .dist-label { font-size: 0.8rem; width: 70px; color: var(--muted); }
+    .dist-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .dist-bar { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+    .dist-rock     .dist-bar { background: var(--rock-col); }
+    .dist-paper    .dist-bar { background: var(--paper-col); }
+    .dist-scissors .dist-bar { background: var(--scissors-col); }
+    .dist-pct { font-family: 'Space Mono', monospace; font-size: 0.72rem; color: var(--muted); width: 36px; text-align: right; }
+
+    /* ── History ── */
+    .history-strip {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .history-pill {
+      font-size: 0.62rem;
+      font-family: 'Space Mono', monospace;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      opacity: 0;
+      transform: scale(0.7);
+      animation: pillIn 0.25s ease forwards;
+    }
+    @keyframes pillIn { to { opacity: 1; transform: scale(1); } }
+    .pill-win  { border-color: #4aff9e44; color: var(--green); }
+    .pill-lose { border-color: #ff6c8f44; color: var(--accent2); }
+    .pill-tie  { border-color: #ffc84a44; color: var(--amber); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">R·P·S</div>
+      <div class="tagline">AI learns your patterns. Can you outsmart it?</div>
+    </header>
+
+    <!-- Score -->
+    <div class="score-bar">
+      <div class="score-side">
+        <div class="score-label">You</div>
+        <div class="score-num score-you" id="score-you">0</div>
+      </div>
+      <div class="score-divider">·</div>
+      <div class="score-side">
+        <div class="score-label">AI</div>
+        <div class="score-num score-ai" id="score-ai">0</div>
+      </div>
+    </div>
+
+    <!-- AI Confidence insight -->
+    <div class="ai-insight">
+      <div class="insight-dot" id="insight-dot"></div>
+      <div class="insight-text" id="insight-text">
+        Play a few rounds and <strong>the AI will start predicting your moves.</strong>
+      </div>
+      <div class="confidence-bar-wrap">
+        <div class="confidence-label" id="conf-label">0%</div>
+        <div class="confidence-track"><div class="confidence-fill" id="conf-fill"></div></div>
+      </div>
+    </div>
+
+    <!-- Arena -->
+    <div class="arena">
+      <div class="fighter" id="fighter-you">
+        <span class="fighter-label">You</span>
+        <span class="fighter-emoji" id="emoji-you">🤔</span>
+        <span class="fighter-name" id="name-you">—</span>
+      </div>
+      <div class="vs-badge">VS</div>
+      <div class="fighter" id="fighter-ai">
+        <span class="fighter-label">AI</span>
+        <span class="fighter-emoji" id="emoji-ai">🤖</span>
+        <span class="fighter-name" id="name-ai">—</span>
+      </div>
+    </div>
+
+    <!-- Outcome -->
+    <div class="outcome-banner">
+      <div class="outcome-text" id="outcome-text"></div>
+    </div>
+
+    <!-- Move Buttons -->
+    <div class="move-grid">
+      <button class="move-btn" data-move="rock"     onclick="play('rock')">
+        <span class="btn-emoji">🪨</span>
+        <span class="btn-label">Rock</span>
+      </button>
+      <button class="move-btn" data-move="paper"    onclick="play('paper')">
+        <span class="btn-emoji">📄</span>
+        <span class="btn-label">Paper</span>
+      </button>
+      <button class="move-btn" data-move="scissors" onclick="play('scissors')">
+        <span class="btn-emoji">✂️</span>
+        <span class="btn-label">Scissors</span>
+      </button>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-row">
+      <span style="font-size:0.78rem;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:.06em">AI:</span>
+      <div class="difficulty-toggle">
+        <button class="diff-btn" id="btn-easy" onclick="setDifficulty('easy')">Easy</button>
+        <button class="diff-btn active" id="btn-hard" onclick="setDifficulty('hard')">Hard</button>
+      </div>
+      <button class="reset-btn" onclick="resetGame()">Reset</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-panel">
+      <div class="stats-title">Session Stats</div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-val" id="stat-rounds">0</div>
+          <div class="stat-key">Rounds</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-winrate">—</div>
+          <div class="stat-key">Win rate</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-ties">0</div>
+          <div class="stat-key">Ties</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-accuracy">—</div>
+          <div class="stat-key">AI accuracy</div>
+        </div>
+      </div>
+
+      <div class="dist-title">Your move distribution</div>
+      <div class="dist-row dist-rock">
+        <div class="dist-label">🪨 Rock</div>
+        <div class="dist-track"><div class="dist-bar" id="dist-rock" style="width:0%"></div></div>
+        <div class="dist-pct" id="pct-rock">0%</div>
+      </div>
+      <div class="dist-row dist-paper">
+        <div class="dist-label">📄 Paper</div>
+        <div class="dist-track"><div class="dist-bar" id="dist-paper" style="width:0%"></div></div>
+        <div class="dist-pct" id="pct-paper">0%</div>
+      </div>
+      <div class="dist-row dist-scissors">
+        <div class="dist-label">✂️ Scissors</div>
+        <div class="dist-track"><div class="dist-bar" id="dist-scissors" style="width:0%"></div></div>
+        <div class="dist-pct" id="pct-scissors">0%</div>
+      </div>
+
+      <div class="dist-title" style="margin-top:16px">Round history</div>
+      <div class="history-strip" id="history-strip"></div>
+    </div>
+  </div>
+
+  <script>
+    // ── State ──
+    const EMOJI = { rock: '🪨', paper: '📄', scissors: '✂️' };
+    const GLOW  = { rock: 'rock-reveal', paper: 'paper-reveal', scissors: 'scissors-reveal' };
+    let difficulty = 'hard';
+    let busy = false;
+
+    // ── Play a round ──
+    async function play(move) {
+      if (busy) return;
+      busy = true;
+      setButtonsDisabled(true);
+
+      // Show player choice immediately
+      revealFighter('you', move);
+      setAIThinking();
+
+      try {
+        const res = await fetch('/play', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ move, difficulty })
+        });
+        const data = await res.json();
+
+        // Short delay so player sees the "thinking" state
+        await sleep(500);
+
+        // Reveal AI move
+        revealFighter('ai', data.result.ai_move);
+
+        // Show outcome
+        await sleep(250);
+        showOutcome(data.result.outcome);
+
+        // Apply win/lose effects
+        applyEffects(data.result.outcome);
+
+        // Update all UI
+        updateScores(data.scores);
+        updateInsight(data.result, data.ai_accuracy);
+        updateStats(data);
+        addHistoryPill(data.result);
+
+      } catch (err) {
+        console.error(err);
+      } finally {
+        await sleep(800);
+        busy = false;
+        setButtonsDisabled(false);
+      }
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ── Fighter reveal ──
+    function revealFighter(side, move) {
+      const el = document.getElementById(`fighter-${side}`);
+      const emojiEl = document.getElementById(`emoji-${side}`);
+      const nameEl  = document.getElementById(`name-${side}`);
+
+      // Remove old glow classes
+      el.classList.remove('reveal', 'rock-reveal', 'paper-reveal', 'scissors-reveal', 'shake');
+
+      emojiEl.textContent = EMOJI[move];
+      nameEl.textContent  = move.toUpperCase();
+
+      void el.offsetWidth; // force reflow for animation
+      el.classList.add('reveal', GLOW[move]);
+    }
+
+    function setAIThinking() {
+      const el = document.getElementById('fighter-ai');
+      const emojiEl = document.getElementById('emoji-ai');
+      const nameEl  = document.getElementById('name-ai');
+      el.classList.remove('reveal','rock-reveal','paper-reveal','scissors-reveal');
+      emojiEl.textContent = '🤔';
+      nameEl.textContent  = '...';
+    }
+
+    // ── Outcome ──
+    function showOutcome(outcome) {
+      const el = document.getElementById('outcome-text');
+      el.classList.remove('show', 'outcome-win', 'outcome-lose', 'outcome-tie');
+      void el.offsetWidth;
+
+      const map = {
+        player: { text: '🎉  You win!',   cls: 'outcome-win'  },
+        ai:     { text: '🤖  AI wins!',   cls: 'outcome-lose' },
+        tie:    { text: '🤝  It\'s a tie', cls: 'outcome-tie'  }
+      };
+      el.textContent = map[outcome].text;
+      el.classList.add('show', map[outcome].cls);
+    }
+
+    function applyEffects(outcome) {
+      const youEl = document.getElementById('fighter-you');
+      const aiEl  = document.getElementById('fighter-ai');
+      if (outcome === 'ai')     { youEl.classList.add('shake'); }
+      if (outcome === 'player') { aiEl.classList.add('shake');  }
+    }
+
+    // ── Scores ──
+    function updateScores(scores) {
+      const bump = (id, val) => {
+        const el = document.getElementById(id);
+        if (el.textContent !== String(val)) {
+          el.textContent = val;
+          el.classList.remove('bump');
+          void el.offsetWidth;
+          el.classList.add('bump');
+        }
+      };
+      bump('score-you', scores.player);
+      bump('score-ai',  scores.ai);
+    }
+
+    // ── AI Insight bar ──
+    function updateInsight(result, aiAccuracy) {
+      const dot  = document.getElementById('insight-dot');
+      const text = document.getElementById('insight-text');
+      const fill = document.getElementById('conf-fill');
+      const label = document.getElementById('conf-label');
+
+      const conf = result.confidence;
+      fill.style.width = conf + '%';
+      label.textContent = conf + '%';
+
+      if (conf > 0) {
+        dot.classList.add('active');
+        const predicted = result.predicted_player_move;
+        const model = result.model_used === 'markov' ? 'Pattern model' : 'Frequency model';
+        text.innerHTML = `<strong>${model}</strong> — ${result.reasoning} AI accuracy overall: <strong>${aiAccuracy}%</strong>`;
+      } else {
+        dot.classList.remove('active');
+        text.innerHTML = `Not enough data yet. Play more rounds and <strong>the AI will learn your patterns.</strong>`;
+      }
+    }
+
+    // ── Stats Panel ──
+    function updateStats(data) {
+      const total = data.total_rounds;
+      const scores = data.scores;
+      const winRate = total > 0 ? Math.round(scores.player / total * 100) : '—';
+
+      document.getElementById('stat-rounds').textContent  = total;
+      document.getElementById('stat-winrate').textContent = total > 0 ? winRate + '%' : '—';
+      document.getElementById('stat-ties').textContent    = scores.tie;
+      document.getElementById('stat-accuracy').textContent= total > 0 ? data.ai_accuracy + '%' : '—';
+
+      // Distribution bars
+      const dist = data.distribution;
+      ['rock','paper','scissors'].forEach(m => {
+        document.getElementById(`dist-${m}`).style.width = dist[m] + '%';
+        document.getElementById(`pct-${m}`).textContent  = dist[m] + '%';
+      });
+    }
+
+    // ── History pills ──
+    function addHistoryPill(result) {
+      const strip = document.getElementById('history-strip');
+      const pill  = document.createElement('span');
+      pill.className = 'history-pill ' +
+        (result.outcome === 'player' ? 'pill-win' :
+         result.outcome === 'ai'     ? 'pill-lose' : 'pill-tie');
+      pill.textContent = EMOJI[result.player_move] + ' vs ' + EMOJI[result.ai_move];
+      strip.appendChild(pill);
+
+      // Keep max 20 pills
+      while (strip.children.length > 20) strip.removeChild(strip.firstChild);
+
+      // Scroll to end
+      strip.scrollLeft = strip.scrollWidth;
+    }
+
+    // ── Difficulty ──
+    function setDifficulty(d) {
+      difficulty = d;
+      document.getElementById('btn-easy').classList.toggle('active', d === 'easy');
+      document.getElementById('btn-hard').classList.toggle('active', d === 'hard');
+    }
+
+    // ── Reset ──
+    async function resetGame() {
+      await fetch('/reset', { method: 'POST' });
+      document.getElementById('score-you').textContent = '0';
+      document.getElementById('score-ai').textContent  = '0';
+      document.getElementById('outcome-text').classList.remove('show');
+      document.getElementById('insight-dot').classList.remove('active');
+      document.getElementById('insight-text').innerHTML = 'Play a few rounds and <strong>the AI will start predicting your moves.</strong>';
+      document.getElementById('conf-fill').style.width = '0%';
+      document.getElementById('conf-label').textContent = '0%';
+      document.getElementById('history-strip').innerHTML = '';
+      ['rock','paper','scissors'].forEach(m => {
+        document.getElementById(`dist-${m}`).style.width = '0%';
+        document.getElementById(`pct-${m}`).textContent  = '0%';
+      });
+      ['stat-rounds','stat-winrate','stat-ties','stat-accuracy'].forEach(id => {
+        document.getElementById(id).textContent = id === 'stat-rounds' || id === 'stat-ties' ? '0' : '—';
+      });
+      // Reset fighters
+      ['you','ai'].forEach(s => {
+        document.getElementById(`fighter-${s}`).classList.remove('reveal','rock-reveal','paper-reveal','scissors-reveal');
+        document.getElementById(`emoji-${s}`).textContent = s === 'you' ? '🤔' : '🤖';
+        document.getElementById(`name-${s}`).textContent  = '—';
+      });
+    }
+
+    function setButtonsDisabled(val) {
+      document.querySelectorAll('.move-btn').forEach(b => b.disabled = val);
+    }
+  </script>
+</body>
+</html>
